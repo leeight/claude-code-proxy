@@ -26,6 +26,10 @@ openai_client = OpenAIClient(
     config.request_timeout,
     api_version=config.azure_api_version,
     custom_headers=custom_headers,
+    connect_timeout=config.connect_timeout,
+    read_timeout=config.read_timeout,
+    write_timeout=config.write_timeout,
+    pool_timeout=config.pool_timeout,
 )
 
 async def validate_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):

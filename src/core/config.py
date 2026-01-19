@@ -21,8 +21,20 @@ class Config:
         self.max_tokens_limit = int(os.environ.get("MAX_TOKENS_LIMIT", "4096"))
         self.min_tokens_limit = int(os.environ.get("MIN_TOKENS_LIMIT", "100"))
         
-        # Connection settings
+        # Connection settings - Fine-grained timeout configuration
+        # Legacy timeout for backward compatibility
         self.request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "90"))
+
+        # New fine-grained timeout settings
+        # connect: timeout for establishing a connection (short)
+        # read: timeout for reading response data (long for streaming)
+        # write: timeout for sending request data (short)
+        # pool: timeout for acquiring a connection from the pool (short)
+        self.connect_timeout = int(os.environ.get("CONNECT_TIMEOUT", "10"))
+        self.read_timeout = int(os.environ.get("READ_TIMEOUT", "600"))  # 10 minutes for long streaming responses
+        self.write_timeout = int(os.environ.get("WRITE_TIMEOUT", "10"))
+        self.pool_timeout = int(os.environ.get("POOL_TIMEOUT", "10"))
+
         self.max_retries = int(os.environ.get("MAX_RETRIES", "2"))
         
         # Model settings - BIG and SMALL models

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import httpx
 from fastapi import HTTPException
 from typing import Optional, AsyncGenerator, Dict, Any
 from openai import AsyncOpenAI, AsyncAzureOpenAI
@@ -9,34 +10,58 @@ from openai._exceptions import APIError, RateLimitError, AuthenticationError, Ba
 class OpenAIClient:
     """Async OpenAI client with cancellation support."""
     
-    def __init__(self, api_key: str, base_url: str, timeout: int = 90, api_version: Optional[str] = None, custom_headers: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        timeout: int = 90,
+        api_version: Optional[str] = None,
+        custom_headers: Optional[Dict[str, str]] = None,
+        connect_timeout: int = 10,
+        read_timeout: int = 600,
+        write_timeout: int = 10,
+        pool_timeout: int = 10
+    ):
         self.api_key = api_key
         self.base_url = base_url
         self.custom_headers = custom_headers or {}
-        
+
         # Prepare default headers
         default_headers = {
             "Content-Type": "application/json",
             "User-Agent": "claude-proxy/1.0.0"
         }
-        
+
         # Merge custom headers with default headers
         all_headers = {**default_headers, **self.custom_headers}
-        
+
+        # Create fine-grained timeout configuration
+        # This allows us to:
+        # - Quickly detect connection failures (connect_timeout)
+        # - Allow long streaming responses (read_timeout)
+        # - Prevent slow request uploads (write_timeout)
+        # - Avoid pool starvation (pool_timeout)
+        timeout_config = httpx.Timeout(
+            connect=connect_timeout,
+            read=read_timeout,
+            write=write_timeout,
+            pool=pool_timeout
+        )
+
         # Detect if using Azure and instantiate the appropriate client
         if api_version:
             self.client = AsyncAzureOpenAI(
                 api_key=api_key,
                 azure_endpoint=base_url,
                 api_version=api_version,
-                timeout=timeout,
+                timeout=timeout_config,
                 default_headers=all_headers
             )
         else:
             self.client = AsyncOpenAI(
                 api_key=api_key,
                 base_url=base_url,
-                timeout=timeout,
+                timeout=timeout_config,
                 default_headers=all_headers
             )
         self.active_requests: Dict[str, asyncio.Event] = {}
