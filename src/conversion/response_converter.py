@@ -9,10 +9,15 @@ def convert_openai_to_claude_response(
     openai_response: dict, original_request: ClaudeMessagesRequest
 ) -> dict:
     """Convert OpenAI response to Claude format."""
+    from src.core.logging import logger
+    import traceback
 
     # Extract response data
     choices = openai_response.get("choices", [])
     if not choices:
+        logger.error(f"No choices in OpenAI response")
+        logger.error(f"OpenAI response: {openai_response}")
+        logger.error(f"Original request model: {original_request.model}")
         raise HTTPException(status_code=500, detail="No choices in OpenAI response")
 
     choice = choices[0]
@@ -190,7 +195,9 @@ async def convert_openai_streaming_to_claude(
 
     except Exception as e:
         # Handle any streaming errors gracefully
-        logger.error(f"Streaming error: {e}")
+        logger.error(f"[Converter] Streaming error: {e}")
+        logger.error(f"[Converter] Error type: {type(e).__name__}")
+        logger.error(f"[Converter] Original request model: {original_request.model}")
         import traceback
 
         logger.error(traceback.format_exc())
@@ -349,7 +356,8 @@ async def convert_openai_streaming_to_claude_with_cancellation(
     except HTTPException as e:
         # Handle cancellation
         if e.status_code == 499:
-            logger.info(f"Request {request_id} was cancelled")
+            logger.info(f"[{request_id}] Request was cancelled")
+            logger.info(f"[{request_id}] Request model: {original_request.model}")
             error_event = {
                 "type": "error",
                 "error": {
@@ -360,10 +368,14 @@ async def convert_openai_streaming_to_claude_with_cancellation(
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
             return
         else:
+            logger.error(f"[{request_id}] HTTPException in streaming (status {e.status_code}): {e.detail}")
+            logger.error(f"[{request_id}] Request model: {original_request.model}")
             raise
     except Exception as e:
         # Handle any streaming errors gracefully
-        logger.error(f"Streaming error: {e}")
+        logger.error(f"[Converter] Streaming error: {e}")
+        logger.error(f"[Converter] Error type: {type(e).__name__}")
+        logger.error(f"[Converter] Original request model: {original_request.model}")
         import traceback
 
         logger.error(traceback.format_exc())

@@ -56,13 +56,14 @@ async def validate_api_key(x_api_key: Optional[str] = Header(None), authorizatio
 
 @router.post("/v1/messages")
 async def create_message(request: ClaudeMessagesRequest, http_request: Request, _: None = Depends(validate_api_key)):
+    request_id = str(uuid.uuid4())
     try:
-        logger.debug(
-            f"Processing Claude request: model={request.model}, stream={request.stream}"
+        logger.info(
+            f"[{request_id}] Processing Claude request: model={request.model}, stream={request.stream}, "
+            f"messages_count={len(request.messages)}, max_tokens={request.max_tokens}"
         )
 
         # Generate unique request ID for cancellation tracking
-        request_id = str(uuid.uuid4())
 
         # Convert Claude request to OpenAI format
         openai_request = convert_claude_to_openai(request, model_manager)
@@ -96,7 +97,8 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
                 )
             except HTTPException as e:
                 # Convert to proper error response for streaming
-                logger.error(f"Streaming error: {e.detail}")
+                logger.error(f"[{request_id}] Streaming error (status {e.status_code}): {e.detail}")
+                logger.error(f"[{request_id}] Request - model={request.model}, stream=True, messages_count={len(request.messages)}")
                 import traceback
 
                 logger.error(traceback.format_exc())
@@ -120,7 +122,10 @@ async def create_message(request: ClaudeMessagesRequest, http_request: Request, 
     except Exception as e:
         import traceback
 
-        logger.error(f"Unexpected error processing request: {e}")
+        logger.error(f"[{request_id}] Unexpected error processing request: {e}")
+        logger.error(f"[{request_id}] Error type: {type(e).__name__}")
+        logger.error(f"[{request_id}] Request - model={request.model}, stream={request.stream}, messages_count={len(request.messages)}")
+        logger.error(f"[{request_id}] Original Claude request model: {request.model}")
         logger.error(traceback.format_exc())
         error_message = openai_client.classify_openai_error(str(e))
         raise HTTPException(status_code=500, detail=error_message)
@@ -160,7 +165,11 @@ async def count_tokens(request: ClaudeTokenCountRequest, _: None = Depends(valid
         return {"input_tokens": estimated_tokens}
 
     except Exception as e:
+        import traceback
         logger.error(f"Error counting tokens: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Request model: {request.model}, messages_count: {len(request.messages)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -198,7 +207,11 @@ async def test_connection():
         }
 
     except Exception as e:
+        import traceback
         logger.error(f"API connectivity test failed: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Test model: {config.small_model}")
+        logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=503,
             content={
