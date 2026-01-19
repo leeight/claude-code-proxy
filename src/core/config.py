@@ -18,6 +18,13 @@ class Config:
         self.host = os.environ.get("HOST", "0.0.0.0")
         self.port = int(os.environ.get("PORT", "8082"))
         self.log_level = os.environ.get("LOG_LEVEL", "INFO")
+
+        # Logging settings
+        self.log_file_path = os.environ.get("LOG_FILE_PATH", "logs/proxy.log")
+        self.log_file_max_bytes = int(os.environ.get("LOG_FILE_MAX_BYTES", str(10 * 1024 * 1024)))  # 10MB default
+        self.log_file_backup_count = int(os.environ.get("LOG_FILE_BACKUP_COUNT", "5"))  # Keep 5 backup files
+        self.log_to_console = os.environ.get("LOG_TO_CONSOLE", "true").lower() in ("true", "1", "yes")
+
         self.max_tokens_limit = int(os.environ.get("MAX_TOKENS_LIMIT", "4096"))
         self.min_tokens_limit = int(os.environ.get("MIN_TOKENS_LIMIT", "100"))
         
