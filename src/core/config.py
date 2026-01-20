@@ -43,7 +43,13 @@ class Config:
         self.pool_timeout = int(os.environ.get("POOL_TIMEOUT", "10"))
 
         self.max_retries = int(os.environ.get("MAX_RETRIES", "2"))
-        
+
+        # Stream timeout and retry settings
+        self.stream_retry_enabled = os.environ.get("STREAM_RETRY_ENABLED", "true").lower() in ("true", "1", "yes")
+        self.stream_max_retries = int(os.environ.get("STREAM_MAX_RETRIES", "3"))
+        self.stream_retry_delay = float(os.environ.get("STREAM_RETRY_DELAY", "2.0"))  # Initial retry delay in seconds
+        self.auto_fallback_to_non_stream = os.environ.get("AUTO_FALLBACK_TO_NON_STREAM", "false").lower() in ("true", "1", "yes")
+
         # Model settings - BIG and SMALL models
         self.big_model = os.environ.get("BIG_MODEL", "gpt-4o")
         self.middle_model = os.environ.get("MIDDLE_MODEL", self.big_model)
