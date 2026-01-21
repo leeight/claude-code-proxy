@@ -30,6 +30,8 @@ openai_client = OpenAIClient(
     read_timeout=config.read_timeout,
     write_timeout=config.write_timeout,
     pool_timeout=config.pool_timeout,
+    max_connections=config.max_connections,
+    max_keepalive=config.max_keepalive,
 )
 
 async def validate_api_key(x_api_key: Optional[str] = Header(None), authorization: Optional[str] = Header(None)):

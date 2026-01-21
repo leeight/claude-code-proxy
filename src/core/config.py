@@ -36,11 +36,15 @@ class Config:
         # connect: timeout for establishing a connection (short)
         # read: timeout for reading response data (long for streaming)
         # write: timeout for sending request data (short)
-        # pool: timeout for acquiring a connection from the pool (short)
+        # pool: timeout for acquiring a connection from the pool (increased to handle high concurrency)
         self.connect_timeout = int(os.environ.get("CONNECT_TIMEOUT", "10"))
         self.read_timeout = int(os.environ.get("READ_TIMEOUT", "600"))  # 10 minutes for long streaming responses
         self.write_timeout = int(os.environ.get("WRITE_TIMEOUT", "10"))
-        self.pool_timeout = int(os.environ.get("POOL_TIMEOUT", "10"))
+        self.pool_timeout = int(os.environ.get("POOL_TIMEOUT", "30"))  # Increased from 10 to 30 to reduce pool timeout errors
+
+        # Connection pool limits
+        self.max_connections = int(os.environ.get("MAX_CONNECTIONS", "200"))  # Total connections across all hosts
+        self.max_keepalive = int(os.environ.get("MAX_KEEPALIVE_CONNECTIONS", "20"))  # Keepalive connections per host
 
         self.max_retries = int(os.environ.get("MAX_RETRIES", "2"))
         

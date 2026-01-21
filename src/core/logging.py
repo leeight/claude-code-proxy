@@ -55,5 +55,26 @@ for uvicorn_logger in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
 # Configure httpx and httpcore to suppress DEBUG logs
 # These libraries log CancelledError at DEBUG level, which is normal operation
 # when clients disconnect or requests timeout, not actual errors
-for http_logger in ["httpx", "httpcore"]:
-    logging.getLogger(http_logger).setLevel(logging.WARNING)
+
+# Create a filter to suppress CancelledError DEBUG logs
+class SuppressCancelledErrorFilter(logging.Filter):
+    """Filter out DEBUG level CancelledError logs from httpx/httpcore."""
+    def filter(self, record):
+        # Suppress DEBUG logs that contain CancelledError
+        if record.levelno == logging.DEBUG and 'CancelledError' in record.getMessage():
+            return False
+        return True
+
+# Apply filter and level to httpx/httpcore and all their sub-loggers
+cancelled_error_filter = SuppressCancelledErrorFilter()
+for http_logger_name in ["httpx", "httpcore"]:
+    http_logger = logging.getLogger(http_logger_name)
+    http_logger.setLevel(logging.WARNING)
+    http_logger.addFilter(cancelled_error_filter)
+
+    # Also apply to all existing sub-loggers
+    for logger_name in logging.Logger.manager.loggerDict:
+        if logger_name.startswith(http_logger_name + '.'):
+            sub_logger = logging.getLogger(logger_name)
+            sub_logger.setLevel(logging.WARNING)
+            sub_logger.addFilter(cancelled_error_filter)

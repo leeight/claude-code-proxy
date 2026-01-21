@@ -22,7 +22,9 @@ class OpenAIClient:
         connect_timeout: int = 10,
         read_timeout: int = 600,
         write_timeout: int = 10,
-        pool_timeout: int = 10
+        pool_timeout: int = 30,
+        max_connections: int = 200,
+        max_keepalive: int = 20
     ):
         self.api_key = api_key
         self.base_url = base_url
@@ -50,21 +52,34 @@ class OpenAIClient:
             pool=pool_timeout
         )
 
+        # Configure connection pool limits to handle high concurrency
+        # - max_connections: total number of connections allowed across all hosts
+        # - max_keepalive_connections: number of keep-alive connections per host
+        limits = httpx.Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_keepalive
+        )
+
+        # Create custom HTTP client with configured limits
+        http_client = httpx.AsyncClient(
+            timeout=timeout_config,
+            limits=limits,
+            headers=all_headers
+        )
+
         # Detect if using Azure and instantiate the appropriate client
         if api_version:
             self.client = AsyncAzureOpenAI(
                 api_key=api_key,
                 azure_endpoint=base_url,
                 api_version=api_version,
-                timeout=timeout_config,
-                default_headers=all_headers
+                http_client=http_client
             )
         else:
             self.client = AsyncOpenAI(
                 api_key=api_key,
                 base_url=base_url,
-                timeout=timeout_config,
-                default_headers=all_headers
+                http_client=http_client
             )
         self.active_requests: Dict[str, asyncio.Event] = {}
     
@@ -110,6 +125,26 @@ class OpenAIClient:
             # Convert to dict format that matches the original interface
             return completion.model_dump()
 
+        except httpx.PoolTimeout as e:
+            logger.warning(f"Connection pool timeout for request {request_id} (pool exhausted, consider increasing POOL_TIMEOUT or MAX_CONNECTIONS)")
+            logger.warning(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=503, detail="Service temporarily unavailable - connection pool exhausted. Please retry.")
+        except httpx.ConnectTimeout as e:
+            logger.error(f"Connection timeout for request {request_id}: {str(e)}")
+            logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Connection timeout - unable to reach upstream service")
+        except httpx.ReadTimeout as e:
+            logger.error(f"Read timeout for request {request_id}: {str(e)}")
+            logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Read timeout - upstream service took too long to respond")
+        except httpx.WriteTimeout as e:
+            logger.error(f"Write timeout for request {request_id}: {str(e)}")
+            logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Write timeout - unable to send request to upstream service")
+        except httpx.TimeoutException as e:
+            logger.error(f"Timeout error for request {request_id}: {str(e)}")
+            logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail=f"Timeout error: {str(e)}")
         except AuthenticationError as e:
             logger.error(f"Authentication error for request {request_id}: {str(e)}")
             logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
@@ -178,6 +213,26 @@ class OpenAIClient:
             # Signal end of stream
             yield "data: [DONE]"
 
+        except httpx.PoolTimeout as e:
+            logger.warning(f"[Stream] Connection pool timeout for request {request_id} (pool exhausted, consider increasing POOL_TIMEOUT or MAX_CONNECTIONS)")
+            logger.warning(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=503, detail="Service temporarily unavailable - connection pool exhausted. Please retry.")
+        except httpx.ConnectTimeout as e:
+            logger.error(f"[Stream] Connection timeout for request {request_id}: {str(e)}")
+            logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Connection timeout - unable to reach upstream service")
+        except httpx.ReadTimeout as e:
+            logger.error(f"[Stream] Read timeout for request {request_id}: {str(e)}")
+            logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Read timeout - upstream service took too long to respond")
+        except httpx.WriteTimeout as e:
+            logger.error(f"[Stream] Write timeout for request {request_id}: {str(e)}")
+            logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail="Write timeout - unable to send request to upstream service")
+        except httpx.TimeoutException as e:
+            logger.error(f"[Stream] Timeout error for request {request_id}: {str(e)}")
+            logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            raise HTTPException(status_code=504, detail=f"Timeout error: {str(e)}")
         except AuthenticationError as e:
             logger.error(f"[Stream] Authentication error for request {request_id}: {str(e)}")
             logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
