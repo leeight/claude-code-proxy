@@ -229,6 +229,12 @@ async def convert_openai_streaming_to_claude_with_cancellation(
     request_id: str,
 ):
     """Convert OpenAI streaming response to Claude streaming format with cancellation support."""
+    import time
+
+    # Track timing for timeout analysis
+    request_start_time = time.time()
+    first_byte_time = None
+    chunk_count = 0
 
     message_id = f"msg_{uuid.uuid4().hex[:24]}"
 
@@ -248,9 +254,22 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
     try:
         async for line in openai_stream:
+            # Track first byte received time
+            if first_byte_time is None and line.strip():
+                first_byte_time = time.time()
+                time_to_first_byte = first_byte_time - request_start_time
+                logger.info(f"[{request_id}] First byte received after {time_to_first_byte:.2f}s")
+
+            chunk_count += 1
+
             # Check if client disconnected
             if await http_request.is_disconnected():
-                logger.info(f"Client disconnected, cancelling request {request_id}")
+                elapsed_time = time.time() - request_start_time
+                logger.warning(
+                    f"[{request_id}] Client disconnected after {elapsed_time:.2f}s "
+                    f"(chunks received: {chunk_count}, first byte: {first_byte_time is not None}). "
+                    f"Possible upstream timeout. Cancelling request."
+                )
                 openai_client.cancel_request(request_id)
                 break
 
@@ -395,3 +414,11 @@ async def convert_openai_streaming_to_claude_with_cancellation(
 
     yield f"event: {Constants.EVENT_MESSAGE_DELTA}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_DELTA, 'delta': {'stop_reason': final_stop_reason, 'stop_sequence': None}, 'usage': usage_data}, ensure_ascii=False)}\n\n"
     yield f"event: {Constants.EVENT_MESSAGE_STOP}\ndata: {json.dumps({'type': Constants.EVENT_MESSAGE_STOP}, ensure_ascii=False)}\n\n"
+
+    # Log successful completion
+    total_time = time.time() - request_start_time
+    ttfb_str = f"{(first_byte_time - request_start_time):.2f}s" if first_byte_time else "N/A"
+    logger.info(
+        f"[{request_id}] Streaming completed successfully in {total_time:.2f}s "
+        f"(chunks: {chunk_count}, TTFB: {ttfb_str})"
+    )
