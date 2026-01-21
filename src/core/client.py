@@ -133,6 +133,18 @@ class OpenAIClient:
             logger.error(f"Full request: {json.dumps(request, ensure_ascii=False, default=str)}")
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=status_code, detail=self.classify_openai_error(str(e)))
+        except httpx.TimeoutException as e:
+            # Handle httpx timeout exceptions (ReadTimeout, ConnectTimeout, WriteTimeout, PoolTimeout)
+            # These should return 504 Gateway Timeout, not 500
+            timeout_type = type(e).__name__
+            logger.error(f"HTTP timeout ({timeout_type}) for request {request_id}: {str(e)}")
+            logger.error(f"Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            logger.error(f"Full request: {json.dumps(request, ensure_ascii=False, default=str)}")
+            logger.error(traceback.format_exc())
+            raise HTTPException(
+                status_code=504,
+                detail=f"Gateway timeout: upstream service did not respond in time ({timeout_type})"
+            )
         except Exception as e:
             logger.error(f"Unexpected error for request {request_id}: {str(e)}")
             logger.error(f"Error type: {type(e).__name__}")
@@ -201,6 +213,18 @@ class OpenAIClient:
             logger.error(f"[Stream] Full request: {json.dumps(request, ensure_ascii=False, default=str)}")
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=status_code, detail=self.classify_openai_error(str(e)))
+        except httpx.TimeoutException as e:
+            # Handle httpx timeout exceptions in streaming requests
+            # These should return 504 Gateway Timeout, not 500
+            timeout_type = type(e).__name__
+            logger.error(f"[Stream] HTTP timeout ({timeout_type}) for request {request_id}: {str(e)}")
+            logger.error(f"[Stream] Request details - Model: {request.get('model')}, Messages count: {len(request.get('messages', []))}")
+            logger.error(f"[Stream] Full request: {json.dumps(request, ensure_ascii=False, default=str)}")
+            logger.error(traceback.format_exc())
+            raise HTTPException(
+                status_code=504,
+                detail=f"Gateway timeout: upstream service did not respond in time ({timeout_type})"
+            )
         except Exception as e:
             logger.error(f"[Stream] Unexpected error for request {request_id}: {str(e)}")
             logger.error(f"[Stream] Error type: {type(e).__name__}")
