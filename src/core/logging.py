@@ -51,3 +51,9 @@ logging.basicConfig(
 # Configure uvicorn to be quieter
 for uvicorn_logger in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
     logging.getLogger(uvicorn_logger).setLevel(logging.WARNING)
+
+# Configure httpx and httpcore to suppress DEBUG logs
+# These libraries log CancelledError at DEBUG level, which is normal operation
+# when clients disconnect or requests timeout, not actual errors
+for http_logger in ["httpx", "httpcore"]:
+    logging.getLogger(http_logger).setLevel(logging.WARNING)
