@@ -3,6 +3,24 @@ import os
 from logging.handlers import RotatingFileHandler
 from src.core.config import config
 
+
+class HttpxCancelledErrorFilter(logging.Filter):
+    """
+    Custom filter to elevate httpx/httpcore CancelledError logs from DEBUG to ERROR.
+
+    When clients disconnect or requests timeout, httpx logs CancelledError at DEBUG level.
+    These are important events that should be tracked as errors, not debug information.
+    """
+    def filter(self, record):
+        # Check if this is a CancelledError from httpx/httpcore
+        if record.name.startswith(('httpx', 'httpcore')):
+            # Look for CancelledError patterns
+            if 'CancelledError' in record.getMessage() or 'receive_response_body.failed' in record.getMessage():
+                # Elevate to ERROR level
+                record.levelno = logging.ERROR
+                record.levelname = 'ERROR'
+        return True
+
 # Parse log level - extract just the first word to handle comments
 log_level = config.log_level.split()[0].upper()
 
@@ -52,8 +70,9 @@ logging.basicConfig(
 for uvicorn_logger in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
     logging.getLogger(uvicorn_logger).setLevel(logging.WARNING)
 
-# Configure httpx and httpcore to suppress DEBUG logs
-# These libraries log CancelledError at DEBUG level, which is normal operation
-# when clients disconnect or requests timeout, not actual errors
-for http_logger in ["httpx", "httpcore"]:
-    logging.getLogger(http_logger).setLevel(logging.WARNING)
+# Apply custom filter to httpx and httpcore to elevate CancelledError to ERROR level
+# These errors indicate interrupted requests and should be tracked as errors, not debug info
+cancelled_error_filter = HttpxCancelledErrorFilter()
+for http_logger_name in ["httpx", "httpcore"]:
+    http_logger = logging.getLogger(http_logger_name)
+    http_logger.addFilter(cancelled_error_filter)
