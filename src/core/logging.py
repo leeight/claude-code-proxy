@@ -58,11 +58,12 @@ def hourly_namer(default_name):
     return default_name
 
 # File handler with time-based rotation (hourly)
+# Keep logs for 1 week (7 days * 24 hours = 168 hours)
 file_handler = TimedRotatingFileHandler(
     config.log_file_path,
     when='H',  # Rotate hourly
     interval=1,  # Every 1 hour
-    backupCount=config.log_file_backup_count,
+    backupCount=168,  # Keep last 7 days (168 hours)
     encoding='utf-8',
     utc=False  # Use local time
 )
