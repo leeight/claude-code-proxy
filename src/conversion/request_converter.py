@@ -207,8 +207,14 @@ def convert_claude_assistant_message(msg: ClaudeMessage) -> Dict[str, Any]:
 
 
 def convert_claude_tool_results(msg: ClaudeMessage) -> List[Dict[str, Any]]:
-    """Convert Claude tool results to OpenAI format."""
+    """Convert Claude tool results to OpenAI format.
+
+    Handles both tool_result and text blocks in the same message.
+    Tool results become 'tool' role messages, while text blocks
+    are collected into a 'user' role message.
+    """
     tool_messages = []
+    text_parts = []
 
     if isinstance(msg.content, list):
         for block in msg.content:
@@ -221,6 +227,19 @@ def convert_claude_tool_results(msg: ClaudeMessage) -> List[Dict[str, Any]]:
                         "content": content,
                     }
                 )
+            elif block.type == Constants.CONTENT_TEXT:
+                # Collect text blocks to preserve user messages mixed with tool results
+                if block.text and block.text.strip():
+                    text_parts.append(block.text)
+
+    # If there are text parts, add them as a user message after the tool results
+    if text_parts:
+        tool_messages.append(
+            {
+                "role": Constants.ROLE_USER,
+                "content": "\n".join(text_parts),
+            }
+        )
 
     return tool_messages
 
