@@ -95,3 +95,7 @@ for uvicorn_logger in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
 # when clients disconnect or requests timeout, not actual errors
 for http_logger in ["httpx", "httpcore"]:
     logging.getLogger(http_logger).setLevel(logging.WARNING)
+
+# Configure openai SDK to suppress DEBUG logs
+# The OpenAI SDK logs request details at DEBUG level which can be verbose
+logging.getLogger("openai").setLevel(logging.WARNING)

@@ -13,6 +13,13 @@ def convert_claude_to_openai(
     claude_request: ClaudeMessagesRequest, model_manager
 ) -> Dict[str, Any]:
     """Convert Claude API request format to OpenAI format."""
+    # Prepare request dump for logging, simplifying tools field to only show names
+    # request_dump = claude_request.model_dump()
+    # if "tools" in request_dump and request_dump["tools"]:
+    #     request_dump["tools"] = [tool.get("name", "") for tool in request_dump["tools"]]
+    # logger.debug(
+    #     f"Original Claude request format: {json.dumps(request_dump, indent=2, ensure_ascii=False)}"
+    # )
 
     # Map model
     openai_model = model_manager.map_claude_model_to_openai(claude_request.model)
@@ -43,35 +50,22 @@ def convert_claude_to_openai(
             )
 
     # Process Claude messages
-    i = 0
-    while i < len(claude_request.messages):
-        msg = claude_request.messages[i]
-
+    for msg in claude_request.messages:
         if msg.role == Constants.ROLE_USER:
-            openai_message = convert_claude_user_message(msg)
-            openai_messages.append(openai_message)
+            # First, check if this user message contains tool results
+            tool_messages = convert_claude_tool_results(msg)
+            if tool_messages:
+                openai_messages.extend(tool_messages)
+
+            # Then, convert any text/image content to user message
+            user_message = convert_claude_user_message(msg)
+            # Only add user message if it has content (not empty string or empty list)
+            if user_message["content"] not in ("", [], None):
+                openai_messages.append(user_message)
+
         elif msg.role == Constants.ROLE_ASSISTANT:
             openai_message = convert_claude_assistant_message(msg)
             openai_messages.append(openai_message)
-
-            # Check if next message contains tool results
-            if i + 1 < len(claude_request.messages):
-                next_msg = claude_request.messages[i + 1]
-                if (
-                    next_msg.role == Constants.ROLE_USER
-                    and isinstance(next_msg.content, list)
-                    and any(
-                        block.type == Constants.CONTENT_TOOL_RESULT
-                        for block in next_msg.content
-                        if hasattr(block, "type")
-                    )
-                ):
-                    # Process tool results
-                    i += 1  # Skip to tool result message
-                    tool_results = convert_claude_tool_results(next_msg)
-                    openai_messages.extend(tool_results)
-
-        i += 1
 
     # Build OpenAI request
     openai_request = {
@@ -84,9 +78,6 @@ def convert_claude_to_openai(
         "temperature": claude_request.temperature,
         "stream": claude_request.stream,
     }
-    logger.debug(
-        f"Converted Claude request to OpenAI format: {json.dumps(openai_request, indent=2, ensure_ascii=False)}"
-    )
     # Add optional parameters
     if claude_request.stop_sequences:
         openai_request["stop"] = claude_request.stop_sequences
@@ -126,6 +117,23 @@ def convert_claude_to_openai(
         else:
             openai_request["tool_choice"] = "auto"
 
+    # Prepare request dump for logging, simplifying tools field to only show names
+    # openai_request_dump = openai_request.copy()
+    # if "tools" in openai_request_dump and openai_request_dump["tools"]:
+    #     openai_request_dump["tools"] = [
+    #         {
+    #             "type": tool.get("type", ""),
+    #             Constants.TOOL_FUNCTION: {
+    #                 "name": tool.get(Constants.TOOL_FUNCTION, {}).get("name", "")
+    #             }
+    #         }
+    #         if isinstance(tool, dict) and tool.get("type") == Constants.TOOL_FUNCTION
+    #         else tool
+    #         for tool in openai_request_dump["tools"]
+    #     ]
+    logger.debug(
+        f"Converted Claude request to OpenAI format: {json.dumps(openai_request, indent=2, ensure_ascii=False)}"
+    )
     return openai_request
 
 
